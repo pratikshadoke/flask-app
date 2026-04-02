@@ -17,7 +17,7 @@ jobs:
       GITHUB_USERNAME: ${{ github.repository_owner }}
 
     steps:
-      # 🔹 Checkout
+      # 🔹 Checkout Code
       - name: Checkout
         uses: actions/checkout@v3
 
@@ -25,20 +25,24 @@ jobs:
       - name: Login to GHCR
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      # 🔹 Build Image
+      # 🔹 Build Docker Image
       - name: Build Image
         run: docker build -t $IMAGE_NAME .
 
-      # 🔹 Push Image
+      # 🔹 Push Docker Image
       - name: Push Image
         run: docker push $IMAGE_NAME
 
-      # 🔹 Replace USERNAME
-      - name: Replace Username
+      # 🔹 Replace USERNAME in deployment.yaml
+      - name: Generate deployment-final.yaml
         run: |
           sed "s|USERNAME|$GITHUB_USERNAME|g" k8s/deployment.yaml > k8s/deployment-final.yaml
 
-      # 🔹 Copy files to EC2
+      # 🔹 Debug (optional but recommended)
+      - name: Show generated file
+        run: cat k8s/deployment-final.yaml
+
+      # 🔹 Copy files to EC2 (FIXED)
       - name: Copy files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -46,9 +50,21 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "k8s/deployment-final.yaml,k8s/service.yaml"
-          target: "/home/${{ secrets.EC2_USER }}/k8s"
+          target: "/home/${{ secrets.EC2_USER }}/"
+          strip_components: 1   # 🔥 removes k8s/ prefix
 
-      # 🔹 Deploy on EC2
+      # 🔹 Debug files on EC2 (VERY USEFUL)
+      - name: Debug files on EC2
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Listing files in home directory"
+            ls -l /home/${{ secrets.EC2_USER }}
+
+      # 🔹 Deploy to Kubernetes (FIXED)
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -56,8 +72,20 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            sudo kubectl apply -f /home/${{ secrets.EC2_USER }}/k8s/deployment-final.yaml
-            sudo kubectl apply -f /home/${{ secrets.EC2_USER }}/k8s/service.yaml
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+            sudo kubectl apply -f /home/${{ secrets.EC2_USER }}/deployment-final.yaml
+            sudo kubectl apply -f /home/${{ secrets.EC2_USER }}/service.yaml
+
             sudo kubectl rollout status deployment/flask-app
 
-            
+      # 🔹 Verify Deployment
+      - name: Check Pods
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            sudo kubectl get pods -o wide
