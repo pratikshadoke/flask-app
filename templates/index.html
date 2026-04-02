@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flask DevOps App</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <h1>🚀 Flask DevOps App</h1>
+    <p>Deployed using Docker, Nginx & CI/CD</p>
+
+    <button onclick="showMessage()">Click Me</button>
+
+    <p id="msg"></p>
+
+    <script>
+        function showMessage() {
+            document.getElementById("msg").innerText = "🔥 DevOps in Action!";
+        }
+    </script>
+
+</body>
+</html>

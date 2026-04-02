@@ -1,0 +1,61 @@
+name: CI-CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write
+      contents: read
+
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}:latest
+      GITHUB_USERNAME: ${{ github.repository_owner }}
+
+    steps:
+      # 🔹 Checkout
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # 🔹 Login to GHCR
+      - name: Login to GHCR
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # 🔹 Build Image
+      - name: Build Image
+        run: docker build -t $IMAGE_NAME .
+
+      # 🔹 Push Image
+      - name: Push Image
+        run: docker push $IMAGE_NAME
+
+      # 🔹 Replace USERNAME
+      - name: Replace Username
+        run: |
+          sed "s|USERNAME|$GITHUB_USERNAME|g" k8s/deployment.yaml > k8s/deployment-final.yaml
+
+      # 🔹 Copy files to EC2
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "k8s/*"
+          target: "/home/ubuntu/k8s"
+
+      # 🔹 Deploy on EC2
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo kubectl apply -f /home/ubuntu/k8s/deployment-final.yaml
+            sudo kubectl apply -f /home/ubuntu/k8s/service.yaml
+            sudo kubectl rollout status deployment/flask-app
