@@ -45,7 +45,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "k8s/*"
+          source: "k8s/deployment-final.yaml,k8s/service.yaml"
           target: "/home/${{ secrets.EC2_USER }}/k8s"
 
       # 🔹 Deploy on EC2
