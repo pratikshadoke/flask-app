@@ -1,4 +1,4 @@
-```yaml
+
 name: CI-CD Pipeline
 
 on:
@@ -103,4 +103,4 @@ jobs:
 
             echo "Services:"
             kubectl get svc
-```
+
