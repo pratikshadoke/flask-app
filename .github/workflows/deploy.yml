@@ -1,3 +1,4 @@
+```yaml
 name: CI-CD Pipeline
 
 on:
@@ -38,11 +39,11 @@ jobs:
         run: |
           sed "s|USERNAME|$GITHUB_USERNAME|g" k8s/deployment.yaml > k8s/deployment-final.yaml
 
-      # 🔹 Debug (optional but recommended)
+      # 🔹 Debug (optional)
       - name: Show generated file
         run: cat k8s/deployment-final.yaml
 
-      # 🔹 Copy files to EC2 (FIXED)
+      # 🔹 Copy files to EC2
       - name: Copy files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -51,43 +52,44 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "k8s/deployment-final.yaml,k8s/service.yaml"
           target: "/home/${{ secrets.EC2_USER }}/"
-          strip_components: 1   # 🔥 removes k8s/ prefix
+          strip_components: 1
 
-      # 🔹 Debug files on EC2 (VERY USEFUL)
-      - name: Debug files on EC2
+      # 🔹 Verify files on EC2
+      - name: Verify files on EC2
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "Listing files in home directory"
+            echo "Files in home directory:"
             ls -l /home/${{ secrets.EC2_USER }}
 
-      # 🔹 Deploy to Kubernetes (FIXED)
-      # - name: Deploy via SSH
-      #   uses: appleboy/ssh-action@v0.1.10
-      #   with:
-      #     host: ${{ secrets.EC2_HOST }}
-      #     username: ${{ secrets.EC2_USER }}
-      #     key: ${{ secrets.EC2_SSH_KEY }}
-      #     script: |
-      #       export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-
-      #       sudo kubectl apply -f /home/${{ secrets.EC2_USER }}/deployment-final.yaml
-      #       sudo kubectl apply -f /home/${{ secrets.EC2_USER }}/service.yaml
-
-      #       sudo kubectl rollout status deployment/flask-app
-      - name: Deploy via SSH
+      # 🔹 Test Kubernetes connectivity
+      - name: Test Kubernetes Connection
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            sudo kubectl --kubeconfig=/etc/rancher/k3s/k3s.yaml apply -f /home/${{ secrets.EC2_USER }}/deployment-final.yaml
-            sudo kubectl --kubeconfig=/etc/rancher/k3s/k3s.yaml apply -f /home/${{ secrets.EC2_USER }}/service.yaml
-            sudo kubectl --kubeconfig=/etc/rancher/k3s/k3s.yaml rollout status deployment/flask-app
+            kubectl get nodes
+
+      # 🔹 Deploy to Kubernetes
+      - name: Deploy to Kubernetes
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Deploying application..."
+
+            kubectl apply -f /home/${{ secrets.EC2_USER }}/deployment-final.yaml
+            kubectl apply -f /home/${{ secrets.EC2_USER }}/service.yaml
+
+            kubectl rollout status deployment/flask-app
+
       # 🔹 Verify Deployment
       - name: Check Pods
         uses: appleboy/ssh-action@v0.1.10
@@ -96,5 +98,9 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-            sudo kubectl get pods -o wide
+            echo "Pods status:"
+            kubectl get pods -o wide
+
+            echo "Services:"
+            kubectl get svc
+```
